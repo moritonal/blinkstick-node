@@ -7,8 +7,8 @@
 
 var isWin = /^win/.test(process.platform);
 
-const usb = require("usb");
-const HID = require("node-hid");
+import * as usb from "usb";
+import * as HID from "node-hid";
 
 var VENDOR_ID = 0x20a0,
     PRODUCT_ID = 0x41e5,
@@ -178,7 +178,7 @@ var VENDOR_ID = 0x20a0,
  * @param {String} [product] Product name of the device. Used only in Windows.
  */
 
-function BlinkStick (device, serialNumber, manufacturer, product) {
+function BlinkStick (device, serialNumber?, manufacturer?, product?) {
 
     if (isWin) {
         if (device) {
@@ -650,7 +650,7 @@ BlinkStick.prototype.getColor = function (index, callback) {
  * @return {Array} Callback returns an array of LED data in the following format: [g0, r0, b0, g1, r1, b1...]
  */
 BlinkStick.prototype.getColors = function (count, callback) {
-    params = _determineReportId(count * 3);
+    let params = _determineReportId(count * 3);
 
     this.getFeatureReport(params.reportId, params.maxLeds * 3 + 2, function (err, buffer) {
         if (callback) {
@@ -681,11 +681,11 @@ BlinkStick.prototype.getColors = function (count, callback) {
  * @param {Function} callback Callback when the operation completes
  */
 BlinkStick.prototype.setColors = function (channel, data, callback) {
-    params = _determineReportId(data.length);
+    let params = _determineReportId(data.length);
 
     var i = 0;
 
-    report = [params.reportId, channel];
+    let report = [params.reportId, channel];
 
     data.forEach(function(item) {
         if (i < params.maxLeds * 3) {
@@ -1191,7 +1191,7 @@ BlinkStick.prototype.morph = function (red, green, blue, options, callback) {
                             } else {
                                 morpher(count + 1);
                             }
-                        }, parseInt(duration/steps));
+                        }, parseInt((duration/steps).toString()))
                     }
                 });
 
@@ -1261,7 +1261,7 @@ BlinkStick.prototype.pulse = function (red, green, blue, options, callback) {
 * @param {Function} [filter] Filter function.
 * @return {Array} BlickStick objects.
 */
-function findBlinkSticks (filter) {
+function findBlinkSticks (filter?) {
     if (filter === undefined) filter = function () { return true; };
 
     var result = [], device, i, devices;
