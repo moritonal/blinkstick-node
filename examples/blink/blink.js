@@ -1,4 +1,4 @@
-var blinkstick = require('blinkstick'),
+var blinkstick = require('./../../blinkstick'),
     device = blinkstick.findFirst();
 
 if (device) {
