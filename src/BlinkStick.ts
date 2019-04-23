@@ -8,6 +8,8 @@ import { IPulseOptions } from "./IPulseOptions";
 import * as usb from "usb";
 import * as HID from "node-hid";
 
+import * as Color from "color"
+
 export class BlinkStick {
 
     hidDevice: HID.HID;
@@ -40,7 +42,7 @@ export class BlinkStick {
 
             if (typeof (err) === 'undefined') {
 
-                this.requiresSoftwareColorPatch = 
+                this.requiresSoftwareColorPatch =
                     this.getVersionMajor() == 1 &&
                     this.getVersionMinor() >= 1 &&
                     this.getVersionMinor() <= 3;
@@ -87,6 +89,67 @@ export class BlinkStick {
                 throw err;
             }
         });
+    }
+
+    async loading(opt: IOptions): Promise<void> {
+
+        const ledCount = 8;
+        const steps = 365;
+
+        const perStepTime = opt.delay / steps;
+
+        // Count the whole ring as between 0 and 1
+        for (let i = 0; i < steps; i++) {
+
+            let data: Array<IColour> = [];
+
+            const percentage = (1.0 / steps) * i;
+            const currentPosition = percentage * ledCount;
+
+            for (let j = 0; j < ledCount; j++) {
+
+                let x = currentPosition - j;
+
+                const power = Math.pow(Math.cos(x * (Math.PI / ledCount)), 1 / 0.1);
+
+                let colour;
+
+                if (opt.red === undefined && opt.blue === undefined && opt.green === undefined) {
+                      
+                    var color = Color.hsl({
+                        h: (365 / ledCount) * j,
+                        s: 100,
+                        l: 25
+                    });
+
+                    colour = {
+                        red: color.red(),
+                        green: color.green(),
+                        blue: color.blue()
+                    };
+
+                } else {
+                    
+                    colour = {
+                        red: opt.red,
+                        green: opt.green,
+                        blue: opt.blue
+                    }
+                }
+
+                data.push({
+                    red: colour.red * power,
+                    green: colour.green * power,
+                    blue: colour.blue * power
+                });
+            }
+
+            await this.setColors(0, data);
+
+            await delay(perStepTime);
+        }
+
+        await this.turnOff();
     }
 
     /**
@@ -352,7 +415,7 @@ export class BlinkStick {
     _determineReportId(ledCount) {
         var reportId = 9;
         var maxLeds = 64;
-    
+
         if (ledCount < 8 * 3) {
             reportId = 6;
             maxLeds = 8;
@@ -363,7 +426,7 @@ export class BlinkStick {
             reportId = 8;
             maxLeds = 32;
         }
-    
+
         return { 'reportId': reportId, 'maxLeds': maxLeds };
     }
 
@@ -404,21 +467,28 @@ export class BlinkStick {
         steps?: number;
     }) {
 
-        options.channel = options.channel || 0;
-        options.index = options.index || 0;
-        options.duration = options.duration || 1000;
-        options.steps = options.steps || 255;
+        options.channel = options.channel === undefined ? 0 : options.channel;
+        options.index = options.index === undefined ? 0 : options.index;
+
+        options.duration = options.duration !== undefined ? options.duration : 1000;
+        options.steps = options.steps !== undefined ? options.steps : 255;
 
         let colour = await this.getColor(options.index);
 
+        console.log(options.duration)
+
         for (let i = 0; i < options.steps; i++) {
+
             let r = colour.red + (options.red - colour.red) / options.steps * i;
             let g = colour.green + (options.green - colour.green) / options.steps * i;
             let b = colour.blue + (options.blue - colour.blue) / options.steps * i;
+
             var nextRed = parseInt(r.toString());
             let nextGreen = parseInt(g.toString());
             let nextBlue = parseInt(b.toString());
+
             await this.setColor(nextRed, nextGreen, nextBlue, options);
+
             await delay(parseInt((options.duration / options.steps).toString()));
         }
     }
@@ -450,24 +520,43 @@ export class BlinkStick {
      * @param {Object}   [options] additional options {"channel": 0, "index": 0, "duration": 1000, "steps": 50}
      * @param {Function} [callback] Callback when the operation completes
      */
-    async pulse(options?: IPulseOptions) {
+    async pulse(options?: IPulseOptions): Promise<void> {
+
         if (options == null)
             options = {};
-        options.channel = options.channel | 0;
-        options.duration = options.duration || 1000;
-        options.index = options.index | 0;
-        options.steps = options.steps | Math.min(options.duration, 255);
-        options.red = options.red | 0;
-        options.green = options.green | 0;
-        options.blue = options.blue | 0;
+
+        options.channel = options.channel === undefined ? 0 : options.channel;
+        options.index = options.index === undefined ? 0 : options.index;
+
+        options.duration = options.duration !== undefined ? options.duration : 1000;
+        options.steps = options.steps !== undefined ? options.steps : Math.min(options.duration, 255);
+
+        options.red = options.red || 0;
+        options.green = options.green || 0;
+        options.blue = options.blue || 0;
+
         try {
+
+            let colour = await this.getColor(options.index);
+
             await this.morph({
                 red: options.red,
                 blue: options.blue,
                 green: options.green,
                 channel: options.channel,
-                duration: options.duration,
-                steps: options.steps
+                duration: options.duration / 2,
+                steps: options.steps,
+                index: options.index
+            });
+
+            await this.morph({
+                red: colour.red,
+                blue: colour.blue,
+                green: colour.green,
+                channel: options.channel,
+                duration: options.duration / 2,
+                steps: options.steps,
+                index: options.index
             });
         }
         catch (err) {
@@ -560,23 +649,64 @@ export class BlinkStick {
      * @param {Function} callback Callback to which to pass the color values.
      * @return {Number, Number, Number} Callback returns three numbers: R, G and B [0..255].
      */
-    getColor(index): Promise<IColour> {
-        return new Promise((res, rej) => {
-            this.getFeatureReport(0x0001, 33, function (err, buffer) {
-                if (typeof (err) === 'undefined') {
-                    if (buffer) {
-                        res({
-                            red: buffer[1],
-                            green: buffer[2],
-                            blue: buffer[3]
-                        });
+    async getColor(index): Promise<IColour> {
+
+        if (index === 0) {
+
+            const colour = await new Promise((res: (colours: IColour) => void, rej) => {
+                this.getFeatureReport(0x0001, 33, function (err, buffer) {
+                    if (typeof (err) === 'undefined') {
+                        if (buffer) {
+                            res({
+                                red: buffer[1],
+                                green: buffer[2],
+                                blue: buffer[3]
+                            } as IColour);
+                        }
+                        else {
+                            rej(err);
+                        }
                     }
                     else {
                         rej(err);
                     }
-                }
-                else {
-                    rej(err);
+                });
+            });
+
+            return colour;
+        } else {
+
+            const colours = await this.getColors(index);
+
+            return colours[index];
+        }
+    }
+
+    async getColors(count: number): Promise<Array<IColour>> {
+
+        const params = this._determineReportId(count * 3);
+
+        return await new Promise((res: (colours: Array<IColour>) => void, rej) => {
+
+            this.getFeatureReport(params.reportId, params.maxLeds * 3 + 2, (err, buffer) => {
+
+                if (typeof (buffer) !== 'undefined' && err == null) {
+
+                    buffer = buffer.slice(2, buffer.length - 1);
+
+                    let colourBuffer: Array<IColour> = [];
+
+                    for (let i = 0; i < params.maxLeds; i++) {
+                        colourBuffer.push({
+                            red: buffer[i * 3 + 1],
+                            green: buffer[i * 3 + 0],
+                            blue: buffer[i * 3 + 2]
+                        });
+                    }
+
+                    res(colourBuffer);
+                } else {
+                    rej();
                 }
             });
         });
@@ -596,19 +726,30 @@ export class BlinkStick {
      * @param {Array} data LED data in the following format: [g0, r0, b0, g1, r1, b1...]
      * @param {Function} callback Callback when the operation completes
      */
-    async setColors(channel : number, data : number[], callback) {
+    async setColors(channel: number, data: Array<IColour>) {
+
+        const buffer = data.reduce((acc, curr) => {
+            acc.push(curr.green, curr.red, curr.blue);
+            return acc;
+        }, []);
+
         let params = this._determineReportId(data.length);
+
         var i = 0;
+
         let report = [params.reportId, channel];
-        data.forEach(function (item) {
+
+        buffer.forEach(function (item) {
             if (i < params.maxLeds * 3) {
                 report.push(item);
                 i += 1;
             }
         });
+
         for (var j = i; j < params.maxLeds * 3; j++) {
             report.push(0);
         }
+
         await this.setFeatureReport(report);
     }
 
@@ -616,7 +757,7 @@ export class BlinkStick {
      * Set the color of LEDs
      */
     async setColor(red?: number, green?: number, blue?: number, options?: IOptions): Promise<void> {
-        
+
         if (red == undefined)
             red = 0;
         if (green == undefined)
@@ -626,13 +767,13 @@ export class BlinkStick {
 
         if (typeof (options) === 'undefined') {
             options = {
-                channel: 0,
-                index: 0
+                channel: undefined,
+                index: undefined
             };
         }
-        
-        if (options.channel === 0 && options.index === 0) {
-            
+
+        if (options.channel == undefined && options.index === undefined) {
+
             await this.setFeatureReport([1, red, green, blue]);
         }
         else {
