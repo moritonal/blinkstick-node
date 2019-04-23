@@ -1,8 +1,10 @@
-var blinkstick = require('./../../blinkstick'),
-    device = blinkstick.findFirst();
+import { findFirst } from "../..";
+
+const device = findFirst();
 
 async function main() {
     if (device) {
+        
         await device.pulse({ red: 255, duration: 1000 });
         await device.pulse({ green: 255, duration: 1000 });
         await device.pulse({ blue: 255, duration: 1000 });

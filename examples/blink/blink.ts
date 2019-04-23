@@ -1,4 +1,4 @@
-import { findFirst } from "./../../blinkstick"
+import { findFirst } from "../.."
 
 const main = async function() {
     
