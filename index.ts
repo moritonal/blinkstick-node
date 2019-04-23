@@ -1,5 +1,5 @@
 import * as usb from "usb";
-import { BlinkStick } from "./BlinkStick";
+import { BlinkStick } from "./src/BlinkStick";
 
 const VENDOR_ID = 0x20a0;
 const PRODUCT_ID = 0x41e5;
@@ -8,28 +8,25 @@ const PRODUCT_ID = 0x41e5;
  * Find BlinkSticks using a filter.
  */
 function findBlinkSticks(filter?: (device: usb.Device) => boolean) {
-    if (filter === undefined) filter = function () { return true; };
 
-    var result: Array<BlinkStick> = [];
+    if (filter === undefined)
+        filter = () => {
+            return true;
+        };
 
     let devices = usb.getDeviceList();
 
-    for (let i in devices) {
-        let device = devices[i];
+    const validDevices = devices.filter(device =>
+        device.deviceDescriptor.idVendor === VENDOR_ID &&
+        device.deviceDescriptor.idProduct === PRODUCT_ID &&
+        filter(device));
 
-        if (device.deviceDescriptor.idVendor === VENDOR_ID &&
-            device.deviceDescriptor.idProduct === PRODUCT_ID &&
-            filter(device)) {
-                
-            result.push(new BlinkStick(
-                device,
-                device.deviceDescriptor.iSerialNumber,
-                device.deviceDescriptor.iManufacturer,
-                device.deviceDescriptor.idProduct));
-        }
-    }
-
-    return result;
+    return validDevices.map(device =>
+        new BlinkStick(
+            device,
+            device.deviceDescriptor.iSerialNumber,
+            device.deviceDescriptor.iManufacturer,
+            device.deviceDescriptor.idProduct));
 }
 
 /**
