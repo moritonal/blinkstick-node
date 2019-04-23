@@ -1,5 +1,6 @@
 import delay from "delay";
 import retry from "retry";
+
 import { IOptions } from "./IOptions";
 import { IColour } from "./IColour";
 import { IPulseOptions } from "./IPulseOptions";

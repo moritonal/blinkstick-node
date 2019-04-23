@@ -5,7 +5,7 @@
         "target": "es6",
         "noImplicitAny": false,
         "moduleResolution": "node",
-        "types" : ["node"],
+        "types": ["node"],
         "sourceMap": true,
         "outDir": "dist",
     }
